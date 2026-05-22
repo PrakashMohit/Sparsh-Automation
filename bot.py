@@ -7,12 +7,12 @@ from datetime import datetime
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────
-STORE_URL    = os.getenv("STORE_URL", "https://ekacosmetics.myshopify.com")
+STORE_URL    = os.getenv("STORE_URL", "https://ekacosmetics.myshopify.com")  # e.g. https://YOUR-STORE.myshopify.com
 CATALOG_URL  = os.getenv("CATALOG_URL", "/collections/all")   # e.g. /collections/all — auto-scraped if set
 PRODUCT_URL  = os.getenv("PRODUCT_URL", "")   # fallback single product
 TOTAL_ORDERS = int(os.getenv("TOTAL_ORDERS", "1000"))
 SPREAD_HOURS = int(os.getenv("SPREAD_HOURS", "24"))
-CONCURRENCY  = int(os.getenv("CONCURRENCY", "1"))
+CONCURRENCY  = int(os.getenv("CONCURRENCY", "3"))
 LOG_FILE     = os.getenv("LOG_FILE", "orders_log.csv")
 HEADLESS     = os.getenv("HEADLESS", "true").lower() == "true"
 
@@ -175,8 +175,7 @@ async def place_order(browser, order_num: int, semaphore: asyncio.Semaphore):
 
         try:
             # ── 1. Product page (random from catalog) ─────────────────────
-            handle = product.split('/products/')[-1].split('?')[0]
-            log.info(f"[{order_num}] Product: {handle}")
+            log.info(f"[{order_num}] Product: {product.split('/products/')[-1].split('?')[0]}")
             await page.goto(product, wait_until="domcontentloaded", timeout=40_000)
             await page.wait_for_timeout(1500)
 
@@ -304,19 +303,6 @@ async def place_order(browser, order_num: int, semaphore: asyncio.Semaphore):
             await ctx.close()
 
 
-# ─── ENSURE BROWSER INSTALLED ─────────────────────────────────────────────
-def ensure_browser():
-    import subprocess, sys
-    result = subprocess.run(
-        [sys.executable, "-m", "playwright", "install", "chromium"],
-        capture_output=True, text=True
-    )
-    if result.returncode != 0:
-        log.error(f"Browser install failed: {result.stderr}")
-    else:
-        log.info("Chromium ready")
-
-
 # ─── MAIN ──────────────────────────────────────────────────────────────────
 async def main():
     global PRODUCT_URLS
@@ -330,13 +316,7 @@ async def main():
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
             headless=HEADLESS,
-            args=[
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--disable-setuid-sandbox",
-                "--single-process",
-            ],
+            args=["--no-sandbox", "--disable-dev-shm-usage"],
         )
 
         # ── Scrape all product URLs at startup ────────────────────────
@@ -349,63 +329,15 @@ async def main():
                 raise Exception("No products found and no PRODUCT_URL fallback set.")
         log.info(f"    Rotating across {len(PRODUCT_URLS)} products randomly")
         for u in PRODUCT_URLS:
-            handle = u.split("/products/")[-1].split("?")[0]
-            log.info(f"      • {handle}")
+            log.info(f"      • {u.split("/products/")[-1].split("?")[0]}")
 
-        # Run orders sequentially with a fresh browser every 50 orders
-        # to avoid memory buildup on Render's 512MB starter plan
-        completed = 0
-        while completed < TOTAL_ORDERS:
-            try:
-                await place_order(browser, completed + 1, semaphore)
-            except Exception as e:
-                msg = str(e)
-                if "closed" in msg or "crashed" in msg or "disconnected" in msg:
-                    log.warning(f"Browser crashed at order {completed+1}, restarting...")
-                    try:
-                        await browser.close()
-                    except Exception:
-                        pass
-                    browser = await pw.chromium.launch(
-                        headless=HEADLESS,
-                        args=[
-                            "--no-sandbox",
-                            "--disable-dev-shm-usage",
-                            "--disable-gpu",
-                            "--disable-setuid-sandbox",
-                            "--single-process",
-                        ],
-                    )
-                    log.info("Browser restarted, continuing...")
-                else:
-                    log.error(f"Order {completed+1} error: {e}")
+        async def run_order(i):
+            await asyncio.sleep(i * DELAY_BETWEEN)
+            await place_order(browser, i + 1, semaphore)
 
-            completed += 1
-            if completed < TOTAL_ORDERS:
-                await asyncio.sleep(DELAY_BETWEEN)
-
-            # Restart browser every 50 orders to free memory
-            if completed % 50 == 0 and completed < TOTAL_ORDERS:
-                log.info(f"Restarting browser after {completed} orders (memory management)...")
-                try:
-                    await browser.close()
-                except Exception:
-                    pass
-                browser = await pw.chromium.launch(
-                    headless=HEADLESS,
-                    args=[
-                        "--no-sandbox",
-                        "--disable-dev-shm-usage",
-                        "--disable-gpu",
-                        "--disable-setuid-sandbox",
-                        "--single-process",
-                    ],
-                )
-
-        try:
-            await browser.close()
-        except Exception:
-            pass
+        tasks = [run_order(i) for i in range(TOTAL_ORDERS)]
+        await asyncio.gather(*tasks)
+        await browser.close()
 
     log.info(f"✅  All done! Log saved → {LOG_FILE}")
 
@@ -457,14 +389,8 @@ async def debug_fields():
 
 
 if __name__ == "__main__":
-    import sys, traceback
+    import sys
     if len(sys.argv) > 1 and sys.argv[1] == "--debug":
         asyncio.run(debug_fields())
     else:
-        ensure_browser()
-        try:
-            asyncio.run(main())
-        except Exception as e:
-            log.error(f"FATAL: {e}")
-            traceback.print_exc()
-            sys.exit(1)
+        asyncio.run(main())
