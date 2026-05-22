@@ -1,0 +1,20 @@
+services:
+  - type: worker          # background job, not a web server
+    name: eka-order-bot
+    runtime: python
+    buildCommand: bash build.sh
+    startCommand: python bot.py
+    plan: starter          # $7/mo — enough for headless Chromium
+    envVars:
+      - key: PRODUCT_URL
+        value: https://ekacosmetics.myshopify.com/products/eye-liner-and-eye-wing-stamp-d60vcc9su5hc73eqehn0?variant=51649785790781  # ← change
+      - key: TOTAL_ORDERS
+        value: "1000"
+      - key: SPREAD_HOURS
+        value: "24"
+      - key: CONCURRENCYcl
+        value: "3"
+      - key: HEADLESS
+        value: "true"
+      - key: LOG_FILE
+        value: "orders_log.csv"
