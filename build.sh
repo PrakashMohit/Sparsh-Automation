@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# build.sh — runs once on Render during deploy
 set -e
-pip install -r requirement.txt
+
+python --version
+pip install -r requirements.txt
+
+# On Render, skip install-deps (no root access) — base image has required libs
+# Set cache dir explicitly so Playwright finds the browser
+export PLAYWRIGHT_BROWSERS_PATH=/opt/render/.cache/ms-playwright
 python -m playwright install chromium
-python -m playwright install-deps chromium
+
 echo "✅ Build complete"
