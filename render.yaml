@@ -1,18 +1,21 @@
 services:
-  - type: worker          # background job, not a web server
+  - type: worker
     name: eka-order-bot
     runtime: python
+    pythonVersion: "3.11"          # pin to 3.11 — greenlet doesn't support 3.14 yet
     buildCommand: bash build.sh
     startCommand: python bot.py
-    plan: starter          # $7/mo — enough for headless Chromium
+    plan: starter
     envVars:
-      - key: PRODUCT_URL
-        value: https://ekacosmetics.myshopify.com/products/eye-liner-and-eye-wing-stamp-d60vcc9su5hc73eqehn0?variant=51649785790781  # ← change
+      - key: STORE_URL
+        value: https://ekacosmetics.myshopify.com
+      - key: CATALOG_URL
+        value: /collections/all
       - key: TOTAL_ORDERS
         value: "1000"
       - key: SPREAD_HOURS
         value: "24"
-      - key: CONCURRENCYcl
+      - key: CONCURRENCY
         value: "3"
       - key: HEADLESS
         value: "true"
