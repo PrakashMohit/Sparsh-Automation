@@ -2,11 +2,13 @@ services:
   - type: worker
     name: eka-order-bot
     runtime: python
-    pythonVersion: "3.11"          # pin to 3.11 — greenlet doesn't support 3.14 yet
+    pythonVersion: "3.11.9"
     buildCommand: bash build.sh
     startCommand: python bot.py
     plan: starter
     envVars:
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: /opt/render/.cache/ms-playwright
       - key: STORE_URL
         value: https://ekacosmetics.myshopify.com
       - key: CATALOG_URL
