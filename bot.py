@@ -304,6 +304,19 @@ async def place_order(browser, order_num: int, semaphore: asyncio.Semaphore):
             await ctx.close()
 
 
+# ─── ENSURE BROWSER INSTALLED ─────────────────────────────────────────────
+def ensure_browser():
+    import subprocess, sys
+    result = subprocess.run(
+        [sys.executable, "-m", "playwright", "install", "chromium"],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        log.error(f"Browser install failed: {result.stderr}")
+    else:
+        log.info("Chromium ready")
+
+
 # ─── MAIN ──────────────────────────────────────────────────────────────────
 async def main():
     global PRODUCT_URLS
@@ -401,6 +414,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--debug":
         asyncio.run(debug_fields())
     else:
+        ensure_browser()
         try:
             asyncio.run(main())
         except Exception as e:
