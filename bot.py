@@ -7,7 +7,7 @@ from datetime import datetime
 from playwright.async_api import async_playwright, TimeoutError as PWTimeout
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────
-STORE_URL    = os.getenv("STORE_URL", "https://ekacosmetics.myshopify.com")  # e.g. https://YOUR-STORE.myshopify.com
+STORE_URL    = os.getenv("STORE_URL", "https://ekacosmetics.myshopify.com")
 CATALOG_URL  = os.getenv("CATALOG_URL", "/collections/all")   # e.g. /collections/all — auto-scraped if set
 PRODUCT_URL  = os.getenv("PRODUCT_URL", "")   # fallback single product
 TOTAL_ORDERS = int(os.getenv("TOTAL_ORDERS", "1000"))
@@ -175,7 +175,8 @@ async def place_order(browser, order_num: int, semaphore: asyncio.Semaphore):
 
         try:
             # ── 1. Product page (random from catalog) ─────────────────────
-            log.info(f"[{order_num}] Product: {product.split('/products/')[-1].split('?')[0]}")
+            handle = product.split('/products/')[-1].split('?')[0]
+            log.info(f"[{order_num}] Product: {handle}")
             await page.goto(product, wait_until="domcontentloaded", timeout=40_000)
             await page.wait_for_timeout(1500)
 
@@ -329,7 +330,8 @@ async def main():
                 raise Exception("No products found and no PRODUCT_URL fallback set.")
         log.info(f"    Rotating across {len(PRODUCT_URLS)} products randomly")
         for u in PRODUCT_URLS:
-            log.info(f"      • {u.split("/products/")[-1].split("?")[0]}")
+            handle = u.split("/products/")[-1].split("?")[0]
+            log.info(f"      • {handle}")
 
         async def run_order(i):
             await asyncio.sleep(i * DELAY_BETWEEN)
