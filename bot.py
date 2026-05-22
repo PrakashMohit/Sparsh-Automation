@@ -12,7 +12,7 @@ CATALOG_URL  = os.getenv("CATALOG_URL", "/collections/all")   # e.g. /collection
 PRODUCT_URL  = os.getenv("PRODUCT_URL", "")   # fallback single product
 TOTAL_ORDERS = int(os.getenv("TOTAL_ORDERS", "1000"))
 SPREAD_HOURS = int(os.getenv("SPREAD_HOURS", "24"))
-CONCURRENCY  = int(os.getenv("CONCURRENCY", "3"))
+CONCURRENCY  = int(os.getenv("CONCURRENCY", "1"))
 LOG_FILE     = os.getenv("LOG_FILE", "orders_log.csv")
 HEADLESS     = os.getenv("HEADLESS", "true").lower() == "true"
 
@@ -352,13 +352,60 @@ async def main():
             handle = u.split("/products/")[-1].split("?")[0]
             log.info(f"      • {handle}")
 
-        async def run_order(i):
-            await asyncio.sleep(i * DELAY_BETWEEN)
-            await place_order(browser, i + 1, semaphore)
+        # Run orders sequentially with a fresh browser every 50 orders
+        # to avoid memory buildup on Render's 512MB starter plan
+        completed = 0
+        while completed < TOTAL_ORDERS:
+            try:
+                await place_order(browser, completed + 1, semaphore)
+            except Exception as e:
+                msg = str(e)
+                if "closed" in msg or "crashed" in msg or "disconnected" in msg:
+                    log.warning(f"Browser crashed at order {completed+1}, restarting...")
+                    try:
+                        await browser.close()
+                    except Exception:
+                        pass
+                    browser = await pw.chromium.launch(
+                        headless=HEADLESS,
+                        args=[
+                            "--no-sandbox",
+                            "--disable-dev-shm-usage",
+                            "--disable-gpu",
+                            "--disable-setuid-sandbox",
+                            "--single-process",
+                        ],
+                    )
+                    log.info("Browser restarted, continuing...")
+                else:
+                    log.error(f"Order {completed+1} error: {e}")
 
-        tasks = [run_order(i) for i in range(TOTAL_ORDERS)]
-        await asyncio.gather(*tasks)
-        await browser.close()
+            completed += 1
+            if completed < TOTAL_ORDERS:
+                await asyncio.sleep(DELAY_BETWEEN)
+
+            # Restart browser every 50 orders to free memory
+            if completed % 50 == 0 and completed < TOTAL_ORDERS:
+                log.info(f"Restarting browser after {completed} orders (memory management)...")
+                try:
+                    await browser.close()
+                except Exception:
+                    pass
+                browser = await pw.chromium.launch(
+                    headless=HEADLESS,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-gpu",
+                        "--disable-setuid-sandbox",
+                        "--single-process",
+                    ],
+                )
+
+        try:
+            await browser.close()
+        except Exception:
+            pass
 
     log.info(f"✅  All done! Log saved → {LOG_FILE}")
 
