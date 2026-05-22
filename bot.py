@@ -317,7 +317,13 @@ async def main():
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(
             headless=HEADLESS,
-            args=["--no-sandbox", "--disable-dev-shm-usage"],
+            args=[
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-setuid-sandbox",
+                "--single-process",
+            ],
         )
 
         # ── Scrape all product URLs at startup ────────────────────────
@@ -391,8 +397,13 @@ async def debug_fields():
 
 
 if __name__ == "__main__":
-    import sys
+    import sys, traceback
     if len(sys.argv) > 1 and sys.argv[1] == "--debug":
         asyncio.run(debug_fields())
     else:
-        asyncio.run(main())
+        try:
+            asyncio.run(main())
+        except Exception as e:
+            log.error(f"FATAL: {e}")
+            traceback.print_exc()
+            sys.exit(1)
