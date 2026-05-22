@@ -18,7 +18,7 @@ services:
       - key: SPREAD_HOURS
         value: "24"
       - key: CONCURRENCY
-        value: "3"
+        value: "1"
       - key: HEADLESS
         value: "true"
       - key: LOG_FILE
